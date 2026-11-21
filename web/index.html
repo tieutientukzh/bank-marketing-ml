@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dự đoán khách đăng ký tiền gửi</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --text: #1d2433;
+    --muted: #667085;
+    --line: #d9dde5;
+    --accent: #2f4b8f;
+    --accent-text: #ffffff;
+    --yes: #1f7a4d;
+    --no: #b54708;
+    --track: #e6e9ef;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171c;
+      --card: #1c2027;
+      --text: #e8ebf0;
+      --muted: #98a2b3;
+      --line: #343a46;
+      --accent: #7c9cf0;
+      --accent-text: #10131a;
+      --yes: #52c48a;
+      --no: #f0a05a;
+      --track: #2a303a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px 16px 48px;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 780px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 20px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .card h2 { font-size: 15px; margin: 0 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 16px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input, select {
+    width: 100%;
+    padding: 8px 10px;
+    font: inherit;
+    color: var(--text);
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button {
+    width: 100%;
+    padding: 12px;
+    font: inherit;
+    font-weight: 600;
+    color: var(--accent-text);
+    background: var(--accent);
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.6; cursor: wait; }
+  #result { text-align: center; }
+  .percent { font-size: 44px; font-weight: 700; line-height: 1.1; }
+  .bar {
+    position: relative;
+    height: 12px;
+    margin: 14px 0 6px;
+    background: var(--track);
+    border-radius: 6px;
+  }
+  .bar-fill { height: 100%; border-radius: 6px; background: var(--accent); }
+  .bar-threshold { position: absolute; top: -4px; width: 2px; height: 20px; background: var(--text); }
+  .bar-note { font-size: 12px; color: var(--muted); }
+  .verdict { font-size: 17px; font-weight: 600; margin: 12px 0 0; }
+  .verdict.yes { color: var(--yes); }
+  .verdict.no { color: var(--no); }
+  .error { color: var(--no); white-space: pre-line; text-align: left; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Dự đoán khách đăng ký tiền gửi có kỳ hạn</h1>
+  <p class="lead">Nhập thông tin một khách hàng (19 thuộc tính, không dùng thời lượng cuộc gọi) để xem xác suất khách đồng ý.</p>
+
+  <form id="form" novalidate>
+    <div id="sections"></div>
+    <button type="submit" id="submit">Dự đoán</button>
+  </form>
+
+  <section class="card" id="result" hidden style="margin-top:16px">
+    <div class="percent" id="percent"></div>
+    <div class="bar">
+      <div class="bar-fill" id="barFill"></div>
+      <div class="bar-threshold" id="barThreshold"></div>
+    </div>
+    <div class="bar-note" id="barNote"></div>
+    <p class="verdict" id="verdict"></p>
+  </section>
+
+  <section class="card error" id="errorBox" hidden style="margin-top:16px"></section>
+</main>
+
+<script>
+const NUMBER_FIELDS = {
+  age: { label: "Tuổi", min: 17, max: 100, step: 1, value: 40 },
+  campaign: { label: "Số lần gọi trong chiến dịch này", min: 1, max: 60, step: 1, value: 2 },
+  pdays: { label: "Ngày từ lần gọi trước (999 = chưa gọi)", min: 0, max: 999, step: 1, value: 999 },
+  previous: { label: "Số lần gọi trước đây", min: 0, max: 10, step: 1, value: 0 },
+  emp_var_rate: { label: "Biến động việc làm (emp.var.rate)", min: -5, max: 3, step: 0.1, value: 1.1 },
+  cons_price_idx: { label: "Chỉ số giá tiêu dùng (cons.price.idx)", min: 90, max: 97, step: 0.001, value: 93.994 },
+  cons_conf_idx: { label: "Niềm tin tiêu dùng (cons.conf.idx)", min: -60, max: -20, step: 0.1, value: -36.4 },
+  euribor3m: { label: "Lãi suất Euribor 3 tháng", min: 0, max: 6, step: 0.001, value: 4.857 },
+  nr_employed: { label: "Số người có việc làm (nr.employed)", min: 4500, max: 5500, step: 0.1, value: 5191 },
+};
+
+const CATEGORY_LABELS = {
+  job: "Nghề nghiệp",
+  marital: "Hôn nhân",
+  education: "Học vấn",
+  default: "Có nợ xấu",
+  housing: "Vay mua nhà",
+  loan: "Vay cá nhân",
+  contact: "Kênh liên lạc",
+  month: "Tháng gọi",
+  day_of_week: "Thứ trong tuần",
+  poutcome: "Kết quả chiến dịch trước",
+};
+
+const CATEGORY_DEFAULTS = {
+  job: "admin.", marital: "married", education: "university.degree", default: "no",
+  housing: "yes", loan: "no", contact: "cellular", month: "may", day_of_week: "mon",
+  poutcome: "nonexistent",
+};
+
+const SECTIONS = [
+  { title: "Thông tin khách hàng", fields: ["age", "job", "marital", "education", "default", "housing", "loan"] },
+  { title: "Lần liên lạc hiện tại", fields: ["contact", "month", "day_of_week"] },
+  { title: "Lịch sử chiến dịch", fields: ["campaign", "pdays", "previous", "poutcome"] },
+  { title: "Bối cảnh kinh tế", fields: ["emp_var_rate", "cons_price_idx", "cons_conf_idx", "euribor3m", "nr_employed"] },
+];
+
+const ECONOMIC_PRESETS = [
+  { label: "Lãi suất cao (Euribor khoảng 4,9)", values: { emp_var_rate: 1.1, cons_price_idx: 93.994, cons_conf_idx: -36.4, euribor3m: 4.857, nr_employed: 5191 } },
+  { label: "Lãi suất trung bình (Euribor khoảng 1,4)", values: { emp_var_rate: -1.8, cons_price_idx: 93.075, cons_conf_idx: -47.1, euribor3m: 1.405, nr_employed: 5099.1 } },
+  { label: "Lãi suất thấp (Euribor khoảng 0,7)", values: { emp_var_rate: -3.4, cons_price_idx: 92.649, cons_conf_idx: -30.1, euribor3m: 0.714, nr_employed: 5017.5 } },
+];
+
+const form = document.getElementById("form");
+const submitButton = document.getElementById("submit");
+const resultBox = document.getElementById("result");
+const errorBox = document.getElementById("errorBox");
+
+function createElement(tag, attributes = {}, children = []) {
+  const element = document.createElement(tag);
+  Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, value));
+  children.forEach((child) => element.append(child));
+  return element;
+}
+
+function createField(name, labelText, control) {
+  const label = createElement("label", { for: name });
+  label.textContent = labelText;
+  return createElement("div", {}, [label, control]);
+}
+
+function createNumberField(name) {
+  const spec = NUMBER_FIELDS[name];
+  const input = createElement("input", {
+    id: name, name, type: "number", min: spec.min, max: spec.max, step: spec.step, value: spec.value, required: "",
+  });
+  return createField(name, spec.label, input);
+}
+
+function createCategoryField(name, choices) {
+  const select = createElement("select", { id: name, name });
+  choices.forEach((choice) => {
+    const option = createElement("option", { value: choice });
+    option.textContent = choice;
+    select.append(option);
+  });
+  select.value = CATEGORY_DEFAULTS[name];
+  return createField(name, CATEGORY_LABELS[name], select);
+}
+
+function createPresetField() {
+  const select = createElement("select", { id: "economicPreset" });
+  ECONOMIC_PRESETS.forEach((preset, index) => {
+    const option = createElement("option", { value: index });
+    option.textContent = preset.label;
+    select.append(option);
+  });
+  select.addEventListener("change", () => applyPreset(ECONOMIC_PRESETS[select.value].values));
+  return createField("economicPreset", "Chọn nhanh bối cảnh có thật", select);
+}
+
+function applyPreset(values) {
+  Object.entries(values).forEach(([name, value]) => {
+    document.getElementById(name).value = value;
+  });
+}
+
+function createSection(section, options) {
+  const grid = createElement("div", { class: "grid" });
+  if (section.title === "Bối cảnh kinh tế") grid.append(createPresetField());
+  section.fields.forEach((name) => {
+    grid.append(name in NUMBER_FIELDS ? createNumberField(name) : createCategoryField(name, options[name]));
+  });
+  const title = createElement("h2");
+  title.textContent = section.title;
+  return createElement("div", { class: "card" }, [title, grid]);
+}
+
+function readCustomer() {
+  const customer = {};
+  new FormData(form).forEach((value, name) => {
+    customer[name] = name in NUMBER_FIELDS ? Number(value) : value;
+  });
+  return customer;
+}
+
+function formatErrors(detail) {
+  if (!Array.isArray(detail)) return String(detail);
+  return detail.map((item) => `${item.loc.slice(1).join(".")}: ${item.msg}`).join("\n");
+}
+
+function showResult(result) {
+  const percent = (result.probability * 100).toFixed(1);
+  const isYes = result.prediction === "yes";
+  document.getElementById("percent").textContent = `${percent}%`;
+  document.getElementById("barFill").style.width = `${percent}%`;
+  document.getElementById("barThreshold").style.left = `${result.threshold * 100}%`;
+  document.getElementById("barNote").textContent = `Vạch đen là ngưỡng quyết định: ${(result.threshold * 100).toFixed(0)}%`;
+  const verdict = document.getElementById("verdict");
+  verdict.textContent = isYes ? "Nên ưu tiên gọi khách này" : "Chưa nên ưu tiên gọi khách này";
+  verdict.className = `verdict ${isYes ? "yes" : "no"}`;
+  resultBox.hidden = false;
+}
+
+function showError(message) {
+  errorBox.textContent = message;
+  errorBox.hidden = false;
+}
+
+async function predict(event) {
+  event.preventDefault();
+  resultBox.hidden = true;
+  errorBox.hidden = true;
+  submitButton.disabled = true;
+  try {
+    const response = await fetch("/predict", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(readCustomer()),
+    });
+    const body = await response.json();
+    if (response.ok) showResult(body);
+    else showError(formatErrors(body.detail));
+  } catch (error) {
+    showError("Không kết nối được tới API. Kiểm tra uvicorn đang chạy.");
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function start() {
+  const options = await (await fetch("/options")).json();
+  const container = document.getElementById("sections");
+  SECTIONS.forEach((section) => container.append(createSection(section, options)));
+  form.addEventListener("submit", predict);
+}
+
+start().catch(() => showError("Không tải được danh sách lựa chọn từ API."));
+</script>
+</body>
+</html>
