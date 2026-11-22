@@ -32,7 +32,14 @@ Hình: `figures/duration_theo_y.png`
 `duration` chỉ biết được **sau khi cuộc gọi kết thúc**, tức là lúc đã biết kết quả. Vì vậy:
 - **bỏ `duration`** khỏi mô hình dự đoán;
 - chỉ dùng nó trong một thí nghiệm đối chứng để chứng minh rò rỉ.
+**Thí nghiệm đối chứng** (`notebooks/thi_nghiem_duration.py`, kiểm định chéo 5 phần trên tập train):
 
+| Mô hình | PR-AUC không duration | PR-AUC có duration | ROC-AUC không / có |
+|---|---|---|---|
+| Hồi quy logistic | 0,4515 | 0,5983 | 0,7898 / 0,9344 |
+| Cây quyết định (max_depth=5) | 0,4111 | 0,6095 | 0,7767 / 0,9235 |
+
+Một cột duy nhất làm PR-AUC tăng 0,15–0,20, gấp hơn 10 lần độ lệch giữa các lần chạy (khoảng 0,015). Điểm "có duration" chỉ dùng làm tham chiếu, không dùng để chọn mô hình.
 ## 3. Giá trị "unknown"
 
 | Cột | Số "unknown" | Tỉ lệ yes của nhóm "unknown" | Tỉ lệ yes của nhóm còn lại |
