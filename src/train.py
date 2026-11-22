@@ -1,5 +1,8 @@
+import json
+from pathlib import Path
+
+import joblib
 from sklearn.compose import ColumnTransformer, make_column_selector
-from sklearn.dummy import DummyClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
@@ -7,8 +10,10 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.tree import DecisionTreeClassifier
 
 from src.data import RANDOM_STATE, load_dataset, split_train_test
-from src.evaluate import eval_cv, run_grid
-from src.features import make_feature_step
+from src.evaluate import eval_cv, eval_test, find_best_threshold, run_grid
+from src.features import DEFAULT_FEATURES, make_feature_step
+
+MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
 
 
 def build_prep():
@@ -26,41 +31,56 @@ def build_prep():
     ])
 
 
-def make_pipe(clf):
+def make_pipe(clf, feat_names=DEFAULT_FEATURES):
     return Pipeline([
-        ("feat", make_feature_step()),
+        ("feat", make_feature_step(feat_names)),
         ("prep", build_prep()),
         ("clf", clf),
     ])
 
 
-def run_n2_morning(X_train, y_train):
-    dummy = make_pipe(DummyClassifier(strategy="most_frequent"))
-    d_mean, _ = eval_cv(dummy, X_train, y_train)
-    print(f"0_Dummy: PR-AUC = {d_mean:.4f}")
-
-    log_pipe = make_pipe(LogisticRegression(max_iter=1000, random_state=RANDOM_STATE))
-    log_grid = {
-        "clf__C": [0.05, 0.1, 0.5, 1.0, 5.0],
-        "clf__class_weight": [None, "balanced"],
+def compare_features(X_train, y_train):
+    subsets = {
+        "4_No_Feat": (),
+        "4_Core_Feat": ("contacted_before", "age_group", "drop_pdays"),
+        "4_All_Feat": DEFAULT_FEATURES,
     }
-    _, log_params, log_sc = run_grid(log_pipe, log_grid, X_train, y_train)
-    print(f"Logistic Grid: PR-AUC = {log_sc:.4f} | {log_params}")
+    for label, names in subsets.items():
+        pipe = make_pipe(LogisticRegression(C=5.0, max_iter=1000, random_state=RANDOM_STATE), names)
+        sc, _ = eval_cv(pipe, X_train, y_train)
+        print(f"{label}: PR-AUC = {sc:.4f}")
 
-    tree_pipe = make_pipe(DecisionTreeClassifier(random_state=RANDOM_STATE))
-    tree_grid = {
-        "clf__max_depth": [4, 5, 6, 7, 8],
-        "clf__min_samples_leaf": [10, 20, 50],
-        "clf__class_weight": [None, "balanced"],
-    }
-    _, tree_params, tree_sc = run_grid(tree_pipe, tree_grid, X_train, y_train)
-    print(f"Tree Grid: PR-AUC = {tree_sc:.4f} | {tree_params}")
+
+def save_artifacts(pipe, threshold):
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    joblib.dump(pipe, MODELS_DIR / "pipeline.joblib")
+    (MODELS_DIR / "threshold.json").write_text(json.dumps({"threshold": round(threshold, 4)}, indent=2))
 
 
 def main():
     X, y = load_dataset(keep_duration=False)
-    X_train, _, y_train, _ = split_train_test(X, y)
-    run_n2_morning(X_train, y_train)
+    X_train, X_test, y_train, y_test = split_train_test(X, y)
+
+    compare_features(X_train, y_train)
+
+    log_grid = {"clf__C": [0.05, 0.1, 0.5, 1.0, 5.0], "clf__class_weight": [None, "balanced"]}
+    best_log, log_params, log_sc = run_grid(make_pipe(LogisticRegression(max_iter=1000, random_state=RANDOM_STATE)), log_grid, X_train, y_train)
+
+    tree_grid = {"clf__max_depth": [4, 5, 6, 7, 8], "clf__min_samples_leaf": [10, 20, 50], "clf__class_weight": [None, "balanced"]}
+    best_tree, tree_params, tree_sc = run_grid(make_pipe(DecisionTreeClassifier(random_state=RANDOM_STATE)), tree_grid, X_train, y_train)
+
+    print(f"5_Best_Logistic: PR-AUC = {log_sc:.4f} | {log_params}")
+    print(f"5_Best_Tree: PR-AUC = {tree_sc:.4f} | {tree_params}")
+
+    best_pipe = best_log if log_sc >= tree_sc else best_tree
+    best_thresh, cv_f1 = find_best_threshold(best_pipe, X_train, y_train)
+    print(f"6_Threshold: {best_thresh:.4f} | CV_F1 = {cv_f1:.4f}")
+
+    best_pipe.fit(X_train, y_train)
+    test_metrics = eval_test(best_pipe, X_test, y_test, best_thresh)
+    print(f"Test_Result: {test_metrics}")
+
+    save_artifacts(best_pipe, best_thresh)
 
 
 if __name__ == "__main__":

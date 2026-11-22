@@ -2,7 +2,8 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_val_score, learning_curve, validation_curve
+from sklearn.metrics import average_precision_score, f1_score, precision_recall_curve, precision_score, recall_score
+from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_val_predict, cross_val_score, learning_curve, validation_curve
 
 FIG_DIR = Path(__file__).resolve().parents[1] / "reports" / "figures"
 
@@ -20,6 +21,25 @@ def run_grid(pipe, grid, X, y):
     search = GridSearchCV(pipe, grid, cv=get_cv(), scoring="average_precision", n_jobs=-1)
     search.fit(X, y)
     return search.best_estimator_, search.best_params_, float(search.best_score_)
+
+
+def find_best_threshold(pipe, X, y):
+    probs = cross_val_predict(pipe, X, y, cv=get_cv(), method="predict_proba", n_jobs=-1)[:, 1]
+    prec, rec, thresh = precision_recall_curve(y, probs)
+    f1_scores = 2 * prec[:-1] * rec[:-1] / (prec[:-1] + rec[:-1] + 1e-12)
+    best_idx = int(np.argmax(f1_scores))
+    return float(thresh[best_idx]), float(f1_scores[best_idx])
+
+
+def eval_test(pipe, X_test, y_test, threshold):
+    probs = pipe.predict_proba(X_test)[:, 1]
+    preds = (probs >= threshold).astype(int)
+    return {
+        "pr_auc": float(average_precision_score(y_test, probs)),
+        "f1": float(f1_score(y_test, preds)),
+        "precision": float(precision_score(y_test, preds)),
+        "recall": float(recall_score(y_test, preds)),
+    }
 
 
 def save_plot(x_vals, train_sc, val_sc, xlabel, title, filename, is_log=False):
