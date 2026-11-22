@@ -1,0 +1,5 @@
+mo_hinh,duration,pr_auc,pr_auc_std,roc_auc
+Cay quyet dinh,co,0.6095,0.0123,0.9235
+Cay quyet dinh,khong,0.4111,0.0127,0.7767
+hoi quy logistic,co,0.5983,0.0157,0.9344
+hoi quy logistic,khong,0.4515,0.0144,0.7898
