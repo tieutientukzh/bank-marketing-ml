@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import joblib
+import numpy as np
 from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
@@ -10,7 +11,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.tree import DecisionTreeClassifier
 
 from src.data import RANDOM_STATE, load_dataset, split_train_test
-from src.evaluate import eval_cv, eval_test, find_best_threshold, run_grid
+from src.evaluate import eval_cv, eval_test, eval_top_k, find_best_threshold, plot_test_reports, run_grid
 from src.features import DEFAULT_FEATURES, make_feature_step
 
 MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
@@ -51,6 +52,14 @@ def compare_features(X_train, y_train):
         print(f"{label}: PR-AUC = {sc:.4f}")
 
 
+def print_top_features(pipe, top_n=8):
+    names = pipe.named_steps["prep"].get_feature_names_out()
+    coefs = pipe.named_steps["clf"].coef_[0]
+    order = np.argsort(np.abs(coefs))[::-1][:top_n]
+    for idx in order:
+        print(f"  {names[idx]}: {coefs[idx]:+.4f}")
+
+
 def save_artifacts(pipe, threshold):
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     joblib.dump(pipe, MODELS_DIR / "pipeline.joblib")
@@ -77,9 +86,13 @@ def main():
     print(f"6_Threshold: {best_thresh:.4f} | CV_F1 = {cv_f1:.4f}")
 
     best_pipe.fit(X_train, y_train)
-    test_metrics = eval_test(best_pipe, X_test, y_test, best_thresh)
-    print(f"Test_Result: {test_metrics}")
+    probs = best_pipe.predict_proba(X_test)[:, 1]
+    print(f"Test_Result: {eval_test(best_pipe, X_test, y_test, best_thresh)}")
+    print(f"Top_20_Percent: {eval_top_k(y_test, probs, ratio=0.2)}")
+    print("Top_Features:")
+    print_top_features(best_pipe)
 
+    plot_test_reports(y_test, probs, best_thresh)
     save_artifacts(best_pipe, best_thresh)
 
 

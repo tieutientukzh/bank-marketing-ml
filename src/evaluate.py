@@ -2,7 +2,16 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.metrics import average_precision_score, f1_score, precision_recall_curve, precision_score, recall_score
+from sklearn.metrics import (
+    ConfusionMatrixDisplay,
+    PrecisionRecallDisplay,
+    average_precision_score,
+    confusion_matrix,
+    f1_score,
+    precision_recall_curve,
+    precision_score,
+    recall_score,
+)
 from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_val_predict, cross_val_score, learning_curve, validation_curve
 
 FIG_DIR = Path(__file__).resolve().parents[1] / "reports" / "figures"
@@ -40,6 +49,38 @@ def eval_test(pipe, X_test, y_test, threshold):
         "precision": float(precision_score(y_test, preds)),
         "recall": float(recall_score(y_test, preds)),
     }
+
+
+def eval_top_k(y_test, probs, ratio=0.2):
+    k = int(len(y_test) * ratio)
+    top_idx = np.argsort(probs)[::-1][:k]
+    y_arr = np.asarray(y_test)
+    hits = int(y_arr[top_idx].sum())
+    total_yes = int(y_arr.sum())
+    return {
+        "called": k,
+        "hits": hits,
+        "precision_at_20": round(hits / k, 4),
+        "recall_at_20": round(hits / total_yes, 4),
+    }
+
+
+def plot_test_reports(y_test, probs, threshold):
+    FIG_DIR.mkdir(parents=True, exist_ok=True)
+    preds = (probs >= threshold).astype(int)
+
+    cm = confusion_matrix(y_test, preds)
+    ConfusionMatrixDisplay(cm, display_labels=["no", "yes"]).plot(cmap="Blues")
+    plt.title(f"Ma tran nham lan (nguong = {threshold:.4f})")
+    plt.tight_layout()
+    plt.savefig(FIG_DIR / "confusion_matrix.png", dpi=150)
+    plt.close()
+
+    PrecisionRecallDisplay.from_predictions(y_test, probs)
+    plt.title("Duong cong Precision-Recall (Tap Test)")
+    plt.tight_layout()
+    plt.savefig(FIG_DIR / "pr_curve.png", dpi=150)
+    plt.close()
 
 
 def save_plot(x_vals, train_sc, val_sc, xlabel, title, filename, is_log=False):
