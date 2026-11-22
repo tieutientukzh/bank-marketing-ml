@@ -1,6 +1,6 @@
 from typing import Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Job = Literal[
     "admin.", "blue-collar", "entrepreneur", "housemaid", "management", "retired",
@@ -75,6 +75,17 @@ class Customer(BaseModel):
     cons_conf_idx: float = Field(ge=-60, le=-20)
     euribor3m: float = Field(ge=0, le=6)
     nr_employed: float = Field(ge=4500, le=5500)
+
+    @model_validator(mode="after")
+    def check_campaign_history(self):
+        never_called = self.previous == 0
+        if never_called != (self.poutcome == "nonexistent"):
+            raise ValueError("poutcome phải là nonexistent khi và chỉ khi previous = 0")
+        if never_called and self.pdays != 999:
+            raise ValueError("previous = 0 thì pdays phải là 999 (chưa từng gọi)")
+        if self.poutcome == "success" and self.pdays == 999:
+            raise ValueError("poutcome = success thì pdays phải khác 999")
+        return self
 
 
 class Prediction(BaseModel):

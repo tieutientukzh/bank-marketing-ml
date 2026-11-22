@@ -236,7 +236,13 @@ function readCustomer() {
 
 function formatErrors(detail) {
   if (!Array.isArray(detail)) return String(detail);
-  return detail.map((item) => `${item.loc.slice(1).join(".")}: ${item.msg}`).join("\n");
+  return detail
+    .map((item) => {
+      const field = item.loc.slice(1).join(".");
+      const message = item.msg.replace(/^Value error, /, "");
+      return field ? `${field}: ${message}` : message;
+    })
+    .join("\n");
 }
 
 function showResult(result) {
