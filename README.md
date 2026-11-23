@@ -36,9 +36,10 @@ Mọi lệnh chạy từ thư mục gốc repo, khi môi trường ảo đang b�
 2	python -m notebooks.eda	Số liệu EDA và 4 hình trong reports/figures/
 3	python -m notebooks.thi_nghiem_duration	Thí nghiệm rò rỉ: reports/thi_nghiem_duration.csv
 4	python -m notebooks.bang_thi_nghiem	Bảng thí nghiệm dòng 0–3: reports/bang_thi_nghiem.csv (khoảng 1–2 phút)
-5	python -m src.train	Tinh chỉnh tham số, chọn ngưỡng, đánh giá trên test, lưu models/pipeline.joblib và models/threshold.json
-6	python -m scripts.smoke_test	Kiểm tra mô hình với 3 khách mẫu và các đường dẫn API
-7	python -m uvicorn src.api:app --reload	Mở http://127.0.0.1:8000 để dùng form, hoặc http://127.0.0.1:8000/docs để thử API
+5	python -m notebooks.duong_cong	Vẽ validation curve và learning curve của 2 thuật toán vào reports/figures/
+6	python -m src.train	Tinh chỉnh tham số, chọn ngưỡng, đánh giá trên test, lưu models/pipeline.joblib và models/threshold.json
+7	python -m scripts.smoke_test	Kiểm tra mô hình với 3 khách mẫu và các đường dẫn API
+8	python -m uvicorn src.api:app --reload	Mở http://127.0.0.1:8000 để dùng form, hoặc http://127.0.0.1:8000/docs để thử API
 
 Hướng dẫn chi tiết phần API: docs/huong_dan_api_demo.md.
 
@@ -55,6 +56,24 @@ Phiên bản	Hồi quy logistic	Cây quyết định (max_depth = 5)
 Tham chiếu: có duration (rò rỉ)	0,5983	0,6122
 
 Nhận xét chi tiết: reports/nhan_xet_eda.md.
+
+## Mô hình cuối
+
+Chạy `python -m src.train` (khoảng 30 giây). Bảng kết quả lưu ở `reports/ket_qua_mo_hinh.csv`, mô hình lưu ở `models/pipeline.joblib` và `models/threshold.json`.
+
+| Bước | Kết quả (PR-AUC, kiểm định chéo 5 phần trên train) |
+|---|---|
+| 4. Chọn đặc trưng | Chỉ xử lý dữ liệu 0,4515; bỏ `log_campaign` 0,4509; đầy đủ 0,4503 → chọn "chỉ xử lý dữ liệu" |
+| 5–6. Tinh chỉnh tham số và `class_weight` (GridSearchCV) | Hồi quy logistic 0,4515 (C = 1, class_weight = None); cây quyết định 0,4376 (max_depth = 12, min_samples_leaf = 100, class_weight = balanced) |
+| 6. Chọn ngưỡng (F1 cao nhất trên dự đoán kiểm định chéo) | 0,193 |
+
+Mô hình cuối là **hồi quy logistic, C = 1, ngưỡng 0,193**. Đánh giá một lần trên tập test (8.236 khách):
+
+| PR-AUC | F1 | Precision | Recall | Gọi 20% khách có xác suất cao nhất |
+|---|---|---|---|---|
+| 0,4534 | 0,509 | 0,444 | 0,596 | Bắt được 64,4% số khách sẽ đồng ý (gọi ngẫu nhiên: 20%) |
+
+Đường PR, ma trận nhầm lẫn, validation curve và learning curve nằm trong `reports/figures/`.
 
 Cấu trúc thư mục
 bank-marketing-ml/
