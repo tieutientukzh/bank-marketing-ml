@@ -2,6 +2,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
     PrecisionRecallDisplay,
@@ -12,9 +13,41 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
 )
-from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_val_predict, cross_val_score, learning_curve, validation_curve
+from sklearn.model_selection import (
+    GridSearchCV,
+    StratifiedKFold,
+    cross_val_predict,
+    cross_val_score,
+    cross_validate,
+    learning_curve,
+    validation_curve,
+)
+
+from src.data import RANDOM_STATE
 
 FIG_DIR = Path(__file__).resolve().parents[1] / "reports" / "figures"
+CV = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
+SCORING = {"pr_auc": "average_precision", "roc_auc": "roc_auc"}
+
+
+def count_iterations(fitted_pipelines):
+    models = [pipeline[-1] for pipeline in fitted_pipelines]
+    if not hasattr(models[0], "n_iter_"):
+        return None
+    return int(max(model.n_iter_.max() for model in models))
+
+
+def evaluate_cv(pipeline, X, y):
+    scores = cross_validate(
+        pipeline, X, y, cv=CV, scoring=SCORING, return_train_score=True, return_estimator=True
+    )
+    return {
+        "pr_auc": scores["test_pr_auc"].mean(),
+        "pr_auc_std": scores["test_pr_auc"].std(),
+        "pr_auc_train": scores["train_pr_auc"].mean(),
+        "roc_auc": scores["test_roc_auc"].mean(),
+        "so_vong_lap": count_iterations(scores["estimator"]),
+    }
 
 
 def get_cv(n_splits=5):
@@ -62,6 +95,24 @@ def eval_top_k(y_test, probs, ratio=0.2):
         "hits": hits,
         "precision_at_20": round(hits / k, 4),
         "recall_at_20": round(hits / total_yes, 4),
+    }
+
+
+def analyze_errors(X_test, y_test, probs, threshold, top_n=5):
+    df = X_test.copy()
+    df["y_true"] = np.asarray(y_test)
+    df["prob"] = probs
+    df["y_pred"] = (probs >= threshold).astype(int)
+
+    fp = df[(df["y_true"] == 0) & (df["y_pred"] == 1)].sort_values("prob", ascending=False)
+    fn = df[(df["y_true"] == 1) & (df["y_pred"] == 0)].sort_values("prob", ascending=True)
+    cols = ["age", "job", "contact", "month", "pdays", "poutcome", "emp.var.rate", "prob"]
+
+    return {
+        "fp_count": len(fp),
+        "fn_count": len(fn),
+        "fp_top": fp[cols].head(top_n),
+        "fn_top": fn[cols].head(top_n),
     }
 
 

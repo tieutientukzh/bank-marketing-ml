@@ -11,7 +11,15 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.tree import DecisionTreeClassifier
 
 from src.data import RANDOM_STATE, load_dataset, split_train_test
-from src.evaluate import eval_cv, eval_test, eval_top_k, find_best_threshold, plot_test_reports, run_grid
+from src.evaluate import (
+    analyze_errors,
+    eval_cv,
+    eval_test,
+    eval_top_k,
+    find_best_threshold,
+    plot_test_reports,
+    run_grid,
+)
 from src.features import DEFAULT_FEATURES, make_feature_step
 
 MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
@@ -91,6 +99,13 @@ def main():
     print(f"Top_20_Percent: {eval_top_k(y_test, probs, ratio=0.2)}")
     print("Top_Features:")
     print_top_features(best_pipe)
+
+    errors = analyze_errors(X_test, y_test, probs, best_thresh)
+    print(f"Errors: FP = {errors['fp_count']}, FN = {errors['fn_count']}")
+    print("Top_FP (Doan nham yes):")
+    print(errors["fp_top"].to_string(index=False))
+    print("Top_FN (Bo sot yes):")
+    print(errors["fn_top"].to_string(index=False))
 
     plot_test_reports(y_test, probs, best_thresh)
     save_artifacts(best_pipe, best_thresh)
