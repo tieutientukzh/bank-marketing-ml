@@ -51,7 +51,7 @@ def evaluate_cv(pipeline, X, y):
 
 
 def get_cv(n_splits=5):
-    return StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+    return StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
 
 
 def eval_cv(model, X, y):

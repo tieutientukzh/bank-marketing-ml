@@ -39,7 +39,7 @@ Gửi (không có `duration`):
 Nhận:
 
 ```json
-{"probability": 0.0640, "prediction": "no", "threshold": 0.1941}
+{"probability": 0.0654, "prediction": "no", "threshold": 0.193}
 ```
 
 ## Kiểm tra dữ liệu đầu vào
