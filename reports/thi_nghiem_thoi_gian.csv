@@ -1,0 +1,9 @@
+cach_chia,chi_so_kinh_te,mo_hinh,ty_le_yes_train,ty_le_yes_test,pr_auc,roc_auc
+Ngau nhien,giu,Hoi quy logistic,0.1127,0.1127,0.4534,0.8006
+Ngau nhien,giu,Cay quyet dinh,0.1127,0.1127,0.4711,0.8007
+Ngau nhien,bo,Hoi quy logistic,0.1127,0.1127,0.4057,0.7644
+Ngau nhien,bo,Cay quyet dinh,0.1127,0.1127,0.3875,0.7676
+Theo thoi gian,giu,Hoi quy logistic,0.0638,0.3083,0.5272,0.7484
+Theo thoi gian,giu,Cay quyet dinh,0.0638,0.3083,0.415,0.5794
+Theo thoi gian,bo,Hoi quy logistic,0.0638,0.3083,0.4965,0.7008
+Theo thoi gian,bo,Cay quyet dinh,0.0638,0.3083,0.34,0.5247

@@ -44,8 +44,9 @@ Mọi lệnh chạy từ **thư mục gốc repo**, khi môi trường ảo đan
 | 4 | `python -m notebooks.bang_thi_nghiem` | Bảng thí nghiệm dòng 0–3: `reports/bang_thi_nghiem.csv` (khoảng 1–2 phút) |
 | 5 | `python -m notebooks.duong_cong` | Vẽ validation curve và learning curve của 2 thuật toán vào `reports/figures/` |
 | 6 | `python -m src.train` | Chọn đặc trưng, tinh chỉnh tham số, chọn ngưỡng, đánh giá trên test; lưu `reports/ket_qua_mo_hinh.csv`, `models/pipeline.joblib` và `models/threshold.json` |
-| 7 | `python -m scripts.smoke_test` | Kiểm tra mô hình với 3 khách mẫu và các đường dẫn API |
-| 8 | `python -m uvicorn src.api:app --reload` | Mở `http://127.0.0.1:8000` để dùng form, hoặc `http://127.0.0.1:8000/docs` để thử API |
+| 7 | `python -m notebooks.thi_nghiem_thoi_gian` | Thí nghiệm chia theo thời gian: `reports/thi_nghiem_thoi_gian.csv` |
+| 8 | `python -m scripts.smoke_test` | Kiểm tra mô hình với 3 khách mẫu và các đường dẫn API |
+| 9 | `python -m uvicorn src.api:app --reload` | Mở `http://127.0.0.1:8000` để dùng form, hoặc `http://127.0.0.1:8000/docs` để thử API |
 
 Hướng dẫn chi tiết phần API: `docs/huong_dan_api_demo.md`.
 
@@ -82,6 +83,20 @@ Mô hình cuối là **hồi quy logistic, C = 1, ngưỡng 0,193**. Đánh giá
 
 Đường PR, ma trận nhầm lẫn, validation curve và learning curve nằm trong `reports/figures/`.
 
+## Thí nghiệm chia theo thời gian
+
+Dữ liệu sắp theo thời gian (05/2008 – 11/2010). Học trên 80% dòng đầu (cũ hơn), kiểm tra trên 20% dòng cuối (mới hơn), so với chia ngẫu nhiên. So sánh bằng ROC-AUC vì PR-AUC phụ thuộc tỉ lệ yes, mà tỉ lệ này đổi từ 6,4% (train) lên 30,8% (test) khi chia theo thời gian.
+
+| Cách chia | Chỉ số kinh tế | Hồi quy logistic | Cây quyết định |
+|---|---|---|---|
+| Ngẫu nhiên | Giữ | 0,801 | 0,801 |
+| Theo thời gian | Giữ | 0,748 | 0,579 |
+| Theo thời gian | Bỏ | 0,701 | 0,525 |
+
+- Chia ngẫu nhiên đánh giá hơi lạc quan: trên dữ liệu tương lai, hồi quy logistic giảm từ 0,80 xuống 0,75.
+- Cây quyết định gần như sụp đổ vì không ngoại suy được: 98,5% khách trong giai đoạn cuối có `euribor3m` ngoài khoảng giá trị đã học. Hồi quy logistic ngoại suy tuyến tính nên bền hơn – thêm một lý do chọn mô hình này.
+- Khi triển khai cần huấn luyện lại định kỳ và chỉnh lại ngưỡng khi tỉ lệ khách đồng ý thay đổi.
+
 ## Cấu trúc thư mục
 
 ```
@@ -111,7 +126,7 @@ bank-marketing-ml/
 |---|---|---|
 | TV1 | Nguyễn Phúc Hiếu (trưởng nhóm) | Dữ liệu, EDA, thí nghiệm rò rỉ, Pipeline dùng chung, bảng thí nghiệm, tổng hợp |
 | TV2 | Lê Thanh Hải | Đặc trưng, schema, API, giao diện web |
-| TV3 | TEN_TV3 | Tinh chỉnh tham số, xử lý lệch lớp, chọn ngưỡng, đánh giá, mô hình cuối |
+| TV3 | Bắc | Tinh chỉnh tham số, xử lý lệch lớp, chọn ngưỡng, đánh giá, mô hình cuối |
 
 ## Nguồn dữ liệu
 
