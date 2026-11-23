@@ -32,6 +32,7 @@ Hình: `figures/duration_theo_y.png`
 `duration` chỉ biết được **sau khi cuộc gọi kết thúc**, tức là lúc đã biết kết quả. Vì vậy:
 - **bỏ `duration`** khỏi mô hình dự đoán;
 - chỉ dùng nó trong một thí nghiệm đối chứng để chứng minh rò rỉ.
+
 **Thí nghiệm đối chứng** (`notebooks/thi_nghiem_duration.py`, kiểm định chéo 5 phần trên tập train):
 
 | Mô hình | PR-AUC không duration | PR-AUC có duration | ROC-AUC không / có |
