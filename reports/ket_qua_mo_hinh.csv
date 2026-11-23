@@ -1,0 +1,7 @@
+phien_ban,mo_hinh,pr_auc,pr_auc_std,tham_so,nguong,f1,precision,recall,recall_goi_20
+4. Chon dac trung: chi xu ly du lieu,Hoi quy logistic,0.4515,0.0143,,,,,,
+4. Chon dac trung: bo log_campaign,Hoi quy logistic,0.4509,0.0138,,,,,,
+4. Chon dac trung: day du,Hoi quy logistic,0.4503,0.0136,,,,,,
+5-6. Tinh chinh + class_weight,Hoi quy logistic,0.4515,,"{'mo_hinh__C': 1.0, 'mo_hinh__class_weight': None}",,,,,
+5-6. Tinh chinh + class_weight,Cay quyet dinh,0.4376,,"{'mo_hinh__class_weight': 'balanced', 'mo_hinh__max_depth': 12, 'mo_hinh__min_samples_leaf': 100}",,,,,
+Ket qua tren tap test,Mo hinh cuoi,0.4534,,,0.193,0.5087,0.4438,0.5959,0.6444

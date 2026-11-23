@@ -3,14 +3,9 @@ from pathlib import Path
 
 import joblib
 import numpy as np
-from sklearn.compose import ColumnTransformer, make_column_selector
-from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LogisticRegression
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from sklearn.tree import DecisionTreeClassifier
+import pandas as pd
 
-from src.data import RANDOM_STATE, load_dataset, split_train_test
+from src.data import load_dataset, split_train_test
 from src.evaluate import (
     analyze_errors,
     eval_cv,
@@ -20,49 +15,42 @@ from src.evaluate import (
     plot_test_reports,
     run_grid,
 )
-from src.features import DEFAULT_FEATURES, make_feature_step
+from src.pipeline import ALL_FEATURES, DATA_CLEANING, build_pipeline, make_model
 
-MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
-
-
-def build_prep():
-    num_pipe = Pipeline([
-        ("imp", SimpleImputer(strategy="median")),
-        ("sc", StandardScaler()),
-    ])
-    cat_pipe = Pipeline([
-        ("imp", SimpleImputer(missing_values="unknown", strategy="most_frequent")),
-        ("ohe", OneHotEncoder(handle_unknown="ignore")),
-    ])
-    return ColumnTransformer([
-        ("num", num_pipe, make_column_selector(dtype_include="number")),
-        ("cat", cat_pipe, make_column_selector(dtype_exclude="number")),
-    ])
-
-
-def make_pipe(clf, feat_names=DEFAULT_FEATURES):
-    return Pipeline([
-        ("feat", make_feature_step(feat_names)),
-        ("prep", build_prep()),
-        ("clf", clf),
-    ])
+ROOT = Path(__file__).resolve().parents[1]
+MODELS_DIR = ROOT / "models"
+RESULTS_PATH = ROOT / "reports" / "ket_qua_mo_hinh.csv"
+FEATURE_SUBSETS = {
+    "4. Chon dac trung: chi xu ly du lieu": DATA_CLEANING,
+    "4. Chon dac trung: bo log_campaign": ("contacted_before", "age_group", "drop_pdays"),
+    "4. Chon dac trung: day du": ALL_FEATURES,
+}
+LOGISTIC_GRID = {
+    "mo_hinh__C": [0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0, 50.0],
+    "mo_hinh__class_weight": [None, "balanced"],
+}
+TREE_GRID = {
+    "mo_hinh__max_depth": [4, 6, 8, 10, 12],
+    "mo_hinh__min_samples_leaf": [10, 20, 50, 100],
+    "mo_hinh__class_weight": [None, "balanced"],
+}
 
 
 def compare_features(X_train, y_train):
-    subsets = {
-        "4_No_Feat": (),
-        "4_Core_Feat": ("contacted_before", "age_group", "drop_pdays"),
-        "4_All_Feat": DEFAULT_FEATURES,
-    }
-    for label, names in subsets.items():
-        pipe = make_pipe(LogisticRegression(C=5.0, max_iter=1000, random_state=RANDOM_STATE), names)
-        sc, _ = eval_cv(pipe, X_train, y_train)
-        print(f"{label}: PR-AUC = {sc:.4f}")
+    rows = []
+    for label, names in FEATURE_SUBSETS.items():
+        pipe = build_pipeline(make_model("logistic", C=5.0), features=names)
+        score, std = eval_cv(pipe, X_train, y_train)
+        print(f"{label}: PR-AUC = {score:.4f}")
+        rows.append({"phien_ban": label, "mo_hinh": "Hoi quy logistic", "pr_auc": score, "pr_auc_std": std})
+    best = max(rows, key=lambda row: row["pr_auc"])
+    print(f"Chon: {best['phien_ban']}")
+    return rows, FEATURE_SUBSETS[best["phien_ban"]]
 
 
 def print_top_features(pipe, top_n=8):
-    names = pipe.named_steps["prep"].get_feature_names_out()
-    coefs = pipe.named_steps["clf"].coef_[0]
+    names = pipe.named_steps["tien_xu_ly"].get_feature_names_out()
+    coefs = pipe.named_steps["mo_hinh"].coef_[0]
     order = np.argsort(np.abs(coefs))[::-1][:top_n]
     for idx in order:
         print(f"  {names[idx]}: {coefs[idx]:+.4f}")
@@ -78,16 +66,23 @@ def main():
     X, y = load_dataset(keep_duration=False)
     X_train, X_test, y_train, y_test = split_train_test(X, y)
 
-    compare_features(X_train, y_train)
+    rows, features = compare_features(X_train, y_train)
 
-    log_grid = {"clf__C": [0.05, 0.1, 0.5, 1.0, 5.0], "clf__class_weight": [None, "balanced"]}
-    best_log, log_params, log_sc = run_grid(make_pipe(LogisticRegression(max_iter=1000, random_state=RANDOM_STATE)), log_grid, X_train, y_train)
+    log_pipe = build_pipeline(make_model("logistic"), features=features)
+    best_log, log_params, log_sc = run_grid(log_pipe, LOGISTIC_GRID, X_train, y_train)
 
-    tree_grid = {"clf__max_depth": [4, 5, 6, 7, 8], "clf__min_samples_leaf": [10, 20, 50], "clf__class_weight": [None, "balanced"]}
-    best_tree, tree_params, tree_sc = run_grid(make_pipe(DecisionTreeClassifier(random_state=RANDOM_STATE)), tree_grid, X_train, y_train)
+    tree_pipe = build_pipeline(make_model("tree"), features=features)
+    best_tree, tree_params, tree_sc = run_grid(tree_pipe, TREE_GRID, X_train, y_train)
 
-    print(f"5_Best_Logistic: PR-AUC = {log_sc:.4f} | {log_params}")
-    print(f"5_Best_Tree: PR-AUC = {tree_sc:.4f} | {tree_params}")
+    print(f"5-6. Best_Logistic: PR-AUC = {log_sc:.4f} | {log_params}")
+    print(f"5-6. Best_Tree: PR-AUC = {tree_sc:.4f} | {tree_params}")
+    for name, score, params in (("Hoi quy logistic", log_sc, log_params), ("Cay quyet dinh", tree_sc, tree_params)):
+        rows.append({
+            "phien_ban": "5-6. Tinh chinh + class_weight",
+            "mo_hinh": name,
+            "pr_auc": score,
+            "tham_so": str(params),
+        })
 
     best_pipe = best_log if log_sc >= tree_sc else best_tree
     best_thresh, cv_f1 = find_best_threshold(best_pipe, X_train, y_train)
@@ -95,10 +90,26 @@ def main():
 
     best_pipe.fit(X_train, y_train)
     probs = best_pipe.predict_proba(X_test)[:, 1]
-    print(f"Test_Result: {eval_test(best_pipe, X_test, y_test, best_thresh)}")
-    print(f"Top_20_Percent: {eval_top_k(y_test, probs, ratio=0.2)}")
-    print("Top_Features:")
-    print_top_features(best_pipe)
+    test_result = eval_test(best_pipe, X_test, y_test, best_thresh)
+    top_k = eval_top_k(y_test, probs, ratio=0.2)
+    print(f"Test_Result: {test_result}")
+    print(f"Top_20_Percent: {top_k}")
+    rows.append({
+        "phien_ban": "Ket qua tren tap test",
+        "mo_hinh": "Mo hinh cuoi",
+        "pr_auc": test_result["pr_auc"],
+        "nguong": best_thresh,
+        "f1": test_result["f1"],
+        "precision": test_result["precision"],
+        "recall": test_result["recall"],
+        "recall_goi_20": top_k["recall_at_20"],
+    })
+    RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).round(4).to_csv(RESULTS_PATH, index=False)
+
+    if hasattr(best_pipe.named_steps["mo_hinh"], "coef_"):
+        print("Top_Features:")
+        print_top_features(best_pipe)
 
     errors = analyze_errors(X_test, y_test, probs, best_thresh)
     print(f"Errors: FP = {errors['fp_count']}, FN = {errors['fn_count']}")
